@@ -1,0 +1,143 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React Metadata Design Pattern</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      .esri-attribution {
+        display: none !important;
+      }
+
+      .esri-view .esri-view-surface canvas:focus {
+        outline: none !important;
+      }
+
+      .map-extent {
+        position: fixed;
+        left: 15px;
+        bottom: 30px;
+        /* background: #eee; */
+        padding: 20px;
+        width: 280px;
+      }
+
+      .map-extent header {
+        margin-bottom: 10px;
+        font-weight: 500;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="https://cdn.bootcdn.net/ajax/libs/react/17.0.2/umd/react.development.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/react-dom/17.0.2/umd/react-dom.development.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.0.0-beta.3/babel.js"></script>
+    <script src="https://unpkg.com/esri-loader"></script>
+    <script type="text/babel">
+      const { useRef, useState, useEffect, useCallback } = React;
+      esriLoader.setDefaultOptions({
+        url: "https://localhost:8443/jsapi/4.19/init.js",
+      });
+
+      const MapComponent = () => {
+        const domRef = useRef(null);
+        const [meta, setMeta] = useState(null);
+
+        function forceUpdate() {
+          if (meta) {
+            setMeta({ ...meta });
+          }
+        }
+
+        const updateUI = useCallback(() => {
+          forceUpdate();
+        }, [meta]);
+
+        useEffect(() => {
+          esriLoader
+            .loadModules(["esri/views/SceneView", "esri/Map"], {
+              css: true,
+              insertCssBefore: "style",
+            })
+            .then(([SceneView, EsriMap]) => {
+              const map = new EsriMap({
+                basemap: "osm",
+              });
+
+              const view = new SceneView({
+                map,
+                container: domRef.current,
+              });
+
+              view.when(() => {
+                // init metadata once
+                setMeta({ view });
+              });
+            });
+        }, []);
+
+        useEffect(() => {
+          let handle = [];
+          if (meta) {
+            handle.push(meta.view.watch("extent", updateUI));
+            handle.push(meta.view.watch("camera", updateUI));
+          }
+          return () => {
+            if (handle.length) {
+              handle.forEach((h) => h.remove());
+              handle = null;
+            }
+          };
+        }, [meta]);
+
+        return (
+          <div ref={domRef} style={{ height: "100%", width: "100%" }}>
+            <section className="esri-widget map-extent">
+              <header>当前地图范围</header>
+              <div>
+                <span>xmin: </span>
+                <span>{meta && meta.view.extent.xmin}</span>
+              </div>
+              <div>
+                <span>xmax: </span>
+                <span>{meta && meta.view.extent.xmax}</span>
+              </div>
+              <div>
+                <span>ymin: </span>
+                <span>{meta && meta.view.extent.ymin}</span>
+              </div>
+              <div>
+                <span>ymax: </span>
+                <span>{meta && meta.view.extent.ymax}</span>
+              </div>
+
+              <header style={{ marginTop: 10 }}>当前地图视角</header>
+              <div>
+                <span>heading: </span>
+                <span>{meta && meta.view.camera.heading}</span>
+              </div>
+
+              <div>
+                <span>tilt: </span>
+                <span>{meta && meta.view.camera.tilt}</span>
+              </div>
+            </section>
+          </div>
+        );
+      };
+
+      ReactDOM.render(<MapComponent />, document.getElementById("root"));
+    </script>
+  </body>
+</html>

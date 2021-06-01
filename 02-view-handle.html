@@ -1,0 +1,108 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>React - View Handle</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      .esri-attribution {
+        display: none !important;
+      }
+
+      .esri-view .esri-view-surface canvas:focus {
+        outline: none !important;
+      }
+
+      .map-extent {
+        position: fixed;
+        left: 15px;
+        bottom: 30px;
+        /* background: #eee; */
+        padding: 20px;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script src="https://cdn.bootcdn.net/ajax/libs/react/17.0.2/umd/react.development.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/react-dom/17.0.2/umd/react-dom.development.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.0.0-beta.3/babel.js"></script>
+    <script src="https://unpkg.com/esri-loader"></script>
+    <script type="text/babel">
+      const { useRef, useEffect, useState } = React;
+      esriLoader.setDefaultOptions({
+        url: "https://localhost:8443/jsapi/4.19/init.js",
+      });
+
+      const MapComponent = () => {
+        const domRef = useRef(null);
+        const [extent, setExtent] = useState(null);
+
+        useEffect(() => {
+          let handle;
+
+          esriLoader
+            .loadModules(["esri/views/MapView", "esri/Map"], {
+              css: true,
+              insertCssBefore: "style",
+            })
+            .then(([MapView, EsriMap]) => {
+              const map = new EsriMap({
+                basemap: "osm",
+              });
+
+              const view = new MapView({
+                map,
+                container: domRef.current,
+              });
+
+              handle = view.watch("extent", (value) => setExtent(value));
+            });
+
+          return () => {
+            if (handle) {
+              handle.remove();
+              handle = null;
+            }
+          };
+        }, []);
+
+        return (
+          <div ref={domRef} style={{ height: "100%", width: "100%" }}>
+            <section className="esri-widget map-extent">
+              <header>当前地图范围</header>
+              <div>
+                <span>xmin: </span>
+                <span>{extent && extent.xmin}</span>
+              </div>
+              <div>
+                <span>xmax: </span>
+                <span>{extent && extent.xmax}</span>
+              </div>
+              <div>
+                <span>ymin: </span>
+                <span>{extent && extent.ymin}</span>
+              </div>
+              <div>
+                <span>ymax: </span>
+                <span>{extent && extent.ymax}</span>
+              </div>
+            </section>
+          </div>
+        );
+      };
+
+      ReactDOM.render(<MapComponent />, document.getElementById("root"));
+    </script>
+  </body>
+</html>
