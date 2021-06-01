@@ -22,42 +22,204 @@
       .esri-view .esri-view-surface canvas:focus {
         outline: none !important;
       }
+
+      .map-extent {
+        position: fixed;
+        left: 15px;
+        bottom: 30px;
+        /* background: #eee; */
+        padding: 20px;
+      }
+
+      .map-extent header {
+        font-weight: 500;
+        margin-bottom: 8px;
+      }
+
+      .button-bar {
+        display: flex;
+        width: 240px;
+      }
+
+      .button-bar > button {
+        margin: 4px;
+      }
     </style>
   </head>
   <body>
     <div id="root"></div>
     <script src="https://cdn.bootcdn.net/ajax/libs/react/17.0.2/umd/react.development.js"></script>
     <script src="https://cdn.bootcdn.net/ajax/libs/react-dom/17.0.2/umd/react-dom.development.js"></script>
+    <script src="https://cdn.bootcdn.net/ajax/libs/rxjs/6.6.7/rxjs.umd.js"></script>
     <script src="https://cdn.bootcdn.net/ajax/libs/babel-standalone/7.0.0-beta.3/babel.js"></script>
     <script src="https://unpkg.com/esri-loader"></script>
-    <script type="text/babel">
-      const { useRef, useEffect } = React;
+    <script type="text/javascript">
       esriLoader.setDefaultOptions({
         url: "https://localhost:8443/jsapi/4.19/init.js",
       });
+
+      async function initMapView(container) {
+        const [MapView, EsriMap] = await esriLoader.loadModules(
+          ["esri/views/MapView", "esri/Map"],
+          {
+            css: true,
+            insertCssBefore: "style",
+          }
+        );
+
+        const map = new EsriMap({
+          basemap: "osm",
+        });
+
+        const view = new MapView({
+          map,
+          container,
+        });
+
+        return view.when(() => {
+          return view;
+        });
+      }
+    </script>
+
+    <script>
+      const { BehaviorSubject, Subject, from } = rxjs;
+      const { takeUntil, map } = rxjs.operators;
+      const { useState, useEffect } = React;
+
+      class MapViewBloc {
+        // internal state
+        state = {
+          loading: false,
+          lod: -1,
+          extent: null,
+        };
+
+        stream$ = new BehaviorSubject(this.state);
+
+        destroy() {
+          this.stream$.unsubscribe();
+
+          if (this.handle) {
+            this.handle.remove();
+            this.handle = null;
+          }
+        }
+
+        setView = (view) => {
+          this.state.extent = view.extent;
+          this.state.loading = false;
+          this.state.lod = view.zoom;
+          this.stream$.next(this.state);
+
+          this.view = view;
+          this.handle = view.watch("extent", (value) => {
+            this.state.extent = view.extent;
+            this.state.lod = view.zoom;
+            this.stream$.next(this.state);
+          });
+        };
+
+        init = (container) => {
+          this.state.loading = true;
+          this.stream$.next(this.state);
+
+          return from(initMapView(container)).subscribe(this.setView);
+        };
+
+        zoomIn = () => {
+          if (this.view) {
+            this.view.zoom += 1;
+          }
+        };
+
+        zoomOut = () => {
+          if (this.view) {
+            this.view.zoom -= 1;
+          }
+        };
+
+        selectLoD = (state) => state.lod;
+        selectExtent = (state) => state.extent;
+
+        useViewBloc = (selector, initialValue = null) => {
+          const unsubscribe$ = new Subject();
+          const [value, setValue] = useState(initialValue);
+
+          useEffect(() => {
+            this.stream$
+              .pipe(map(selector), takeUntil(unsubscribe$))
+              .subscribe(setValue);
+
+            return () => {
+              unsubscribe$.next();
+              unsubscribe$.complete();
+            };
+          }, []);
+
+          return value;
+        };
+      }
+    </script>
+    <script type="text/babel">
+      const { useRef } = React;
+
+      const bloc = new MapViewBloc();
 
       const MapComponent = () => {
         const domRef = useRef(null);
 
         useEffect(() => {
-          esriLoader
-            .loadModules(["esri/views/MapView", "esri/Map"], {
-              css: true,
-              insertCssBefore: "style",
-            })
-            .then(([MapView, EsriMap]) => {
-              const map = new EsriMap({
-                basemap: "osm",
-              });
-
-              const view = new MapView({
-                map,
-                container: domRef.current,
-              });
-            });
+          bloc.init(domRef.current);
         }, []);
 
-        return <div ref={domRef} style={{ height: "100%", width: "100%" }} />;
+        const lod = bloc.useViewBloc(bloc.selectLoD, -1);
+        const extent = bloc.useViewBloc(bloc.selectExtent, {});
+
+        return (
+          <div ref={domRef} style={{ height: "100%", width: "100%" }}>
+            <section className="esri-component esri-widget map-extent">
+              <header>当前地图范围</header>
+              <div>
+                <span>xmin: </span>
+                <span>{extent && extent.xmin}</span>
+              </div>
+              <div>
+                <span>xmax: </span>
+                <span>{extent && extent.xmax}</span>
+              </div>
+              <div>
+                <span>ymin: </span>
+                <span>{extent && extent.ymin}</span>
+              </div>
+              <div>
+                <span>ymax: </span>
+                <span>{extent && extent.ymax}</span>
+              </div>
+
+              <header style={{ marginTop: 10 }}>当前显示级别</header>
+              <div>
+                <span>LOD: </span>
+                <span>{lod}</span>
+              </div>
+
+              <div className="button-bar">
+                <button
+                  className="esri-button esri-widget"
+                  onClick={() => bloc.zoomIn()}
+                >
+                  Zoom In
+                </button>
+                <button
+                  className="esri-button esri-widget"
+                  onClick={() => bloc.zoomOut()}
+                >
+                  Zoom Out
+                </button>
+              </div>
+            </section>
+          </div>
+        );
       };
 
       ReactDOM.render(<MapComponent />, document.getElementById("root"));
