@@ -1,0 +1,43 @@
+<!DOCTYPE html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta http-equiv="X-UA-Compatible" content="IE=edge" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>ESM App</title>
+    <style>
+      html,
+      body,
+      #root {
+        height: 100%;
+        width: 100%;
+        margin: 0;
+        padding: 0;
+      }
+
+      .esri-attribution {
+        display: none !important;
+      }
+
+      .esri-view .esri-view-surface canvas:focus {
+        outline: none !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="root"></div>
+    <script type="module">
+      import Map from "https://localhost:8443/jsapi/4.19/@arcgis/core/Map.js";
+      import MapView from "https://localhost:8443/jsapi/4.19/@arcgis/core/views/MapView.js";
+
+      const map = new EsriMap({
+        basemap: "osm",
+      });
+
+      const view = new MapView({
+        map,
+        container: document.getElementById("root"),
+      });
+    </script>
+  </body>
+</html>
